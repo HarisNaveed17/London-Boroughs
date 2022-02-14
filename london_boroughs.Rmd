@@ -1,0 +1,104 @@
+---
+title: "london Boroughs (With Special Reference to Newham)"
+author: "Haris"
+date: "2/14/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## London Boroughs Data
+This data set is available from:
+https://data.london.gov.uk/dataset/land-area-and-population-density-ward-and-borough
+
+It contains information about the size and population of the boroughs of London, as well as population forecasts for each borough uptil 2050. This is a cleaner version of an analysis I performed of the same data a few months ago, with more focus on improving the quality of the visualizations I make
+
+I focus on the borough of Newham for 2011. There's no good reason for it, I just find the name funny. 
+
+```{r, message=FALSE}
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(patchwork)
+```
+Let's load the data with the columns of interest.
+```{r}
+london_boroughs <- read_csv('housing-density-borough.csv', col_select = c('Name','Year', 'Population', 'Total_Area_Hectares'))
+```
+```{r}
+year = '2011'
+remove_agg_areas = c("Greater London", "Inner London", "Outer London")
+ldn_brghs_2011 <- london_boroughs %>%
+  filter((Year==year) & !london_boroughs$Name %in% remove_agg_areas)
+```
+We choose a year and then remove Greater London, Outer London and Inner London from the resulting table, since these regions are aggregates of the boroughs given in the table. 
+
+```{r}
+focus_borough = "Newham"
+borough <- ldn_brghs_2011 %>%
+  filter(Name==focus_borough)
+```
+
+I want to highlight Newham in the upcoming plots, so I will create a separate frame for it and remove it from the rest of the boroughs.
+
+```{r}
+ldn_brghs_2011 %>% 
+  ggplot(aes(y=Population, x=Total_Area_Hectares, label=Name)) +
+  geom_point() +
+  geom_point(data=borough, color='Blue') +
+  geom_label_repel(min.segment.length=0, max.overlaps=Inf, size=2.8, label.size=0, label.padding=0) +
+  theme_minimal(base_size = 12) +
+  scale_y_continuous(label=label_number_si()) +
+  scale_x_continuous(label=label_number_si()) +
+  labs(y='Population', x='Total Area (Hectares)', title='Which Boroughs Have the Highest Population Density?')
+```
+
+London is very crowded. Newham in particular seems to have the same number of people as Bromley on the far right, but one - third of the area.
+
+```{r, message=FALSE}
+ldn_brghs_2011 %>%
+  ggplot(aes(x=reorder(Name, Population), y=Population)) +
+  geom_col() +
+  geom_col(data=borough, fill='dark red') +
+  coord_flip() +
+  labs(x='Boroughs', y='Population', title='Population by Boroughs (sorted in descending order)') +
+  scale_y_continuous(labels = label_number_si()) +
+  theme(axis.title=element_text(size=11), axis.text = element_text(size=8), plot.title.position = 'plot')
+```
+
+Newham is one of the most populous boroughs in the city. Yet, its size, as evident from the scatter plot, is comparable to places with much smaller population (such as Merton).
+
+Finally, we'll take a look at how the population of Newham is set to increase over the next fifty or so years. 
+
+```{r}
+Newham_trend <- london_boroughs %>%
+  filter(Name=="Newham") %>%
+  select(Year, Population) %>%
+  mutate(percent_change=((Population - lag(Population))/Population)*100)
+```
+
+```{r}
+pop_plot <- Newham_trend %>%
+  ggplot(aes(x=Year, y=Population)) +
+  geom_line() +
+  scale_y_continuous(labels = label_number_si()) +
+  theme_minimal() +
+  labs(title="Population of Newham", subtitle = "Past & Present")
+
+change_plot <- Newham_trend %>%
+  ggplot(aes(x=Year, y=percent_change)) +
+  geom_line() +
+  scale_y_continuous(labels = label_number_si()) +
+  theme_minimal() +
+  labs(title="% Change in Population of Newham", subtitle = "Past & Present", y="% Change")
+
+pop_plot / change_plot
+
+```
+
+The highest growth rate in recent times was witnessed in the 2000s. After 2010 the increase rate is projected to slow down and eventually approach zero by roughly 2042.
+
